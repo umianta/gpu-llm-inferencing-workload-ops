@@ -1,0 +1,129 @@
+# vllm-llmd-monitoring Helm values
+# Enterprise defaults: agent DaemonSet on every GPU node (auto-discovery),
+# optional bundled Prometheus + Grafana, optional OTLP push. Designed for
+# large fleets (1000s of GPUs) on on-prem / k3s.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# -- Cluster identity, stamped on every metric.
+cluster: "default"
+
+image:
+  repository: ghcr.io/OWNER/gpu-llm-inferencing-workload-ops-agent
+  tag: "0.1.0"
+  # For air-gapped / k3s local image import, set to Never and preload the image.
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# ---------------------------------------------------------------------------
+# Telemetry agent (DaemonSet, one pod per GPU node)
+# ---------------------------------------------------------------------------
+agent:
+  enabled: true
+  intervalSeconds: 30
+  prometheusPort: 9835
+
+  # Cost model: GPU $/hour used for cost.gpu.usd.estimate. 0 disables USD cost.
+  gpuHourlyUsd: 0
+
+  # Per-node auto-discovery of vLLM/EPP pods (recommended; multi-node safe).
+  discovery:
+    enabled: true
+    # Optional label selector to restrict which pods are treated as vLLM.
+    # Empty = any pod that serves a model (parsed from container args).
+    vllmSelector: ""
+  # Static fallback targets (rarely needed when discovery is on).
+  vllmEndpoints: []
+  llmdEndpoints: []
+
+  # NVML access without consuming a GPU slice.
+  nvidiaRuntimeClassName: nvidia
+  nvidiaVisibleDevices: "all"
+
+  # Only schedule on NVIDIA GPU nodes.
+  nodeSelector:
+    nvidia.com/gpu.present: "true"
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # hostPID is required to map NVML compute PIDs -> pods (per-model VRAM/util).
+  hostPID: true
+
+  # Persist accrued GPU-seconds on each node so cost survives agent restarts.
+  costPersistence:
+    enabled: true
+    hostPath: /var/lib/vllm-llmd-agent
+
+# ---------------------------------------------------------------------------
+# llm-d EPP metrics auth (grants the EPP ServiceAccounts system:auth-delegator
+# so their protected /metrics endpoints can be scraped).
+# ---------------------------------------------------------------------------
+eppMetricsAuth:
+  enabled: false
+  serviceAccounts: []
+    # - name: flow-control-epp
+    #   namespace: llm-d-flow-control
+
+# ---------------------------------------------------------------------------
+# Bundled Prometheus (standalone, no Operator). Disable to use your own.
+# ---------------------------------------------------------------------------
+prometheus:
+  enabled: true
+  image: prom/prometheus:v2.54.1
+  # For HA, run 2 replicas and remote-write to a deduplicating store
+  # (Thanos/Mimir/Cortex) — that's the real HA answer for large fleets.
+  replicas: 1
+  externalLabels: {}
+    # cluster: prod
+  retention: "3d"
+  scrapeInterval: "30s"
+  # For large fleets, point remoteWrite at Thanos/Mimir/Cortex for long-term.
+  remoteWrite: []
+    # - url: http://thanos-receive:19291/api/v1/receive
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 1Gi }
+  persistence:
+    enabled: false
+    size: 20Gi
+    storageClass: ""
+
+# ---------------------------------------------------------------------------
+# Bundled Grafana + the executive dashboard. Disable to use your own.
+# ---------------------------------------------------------------------------
+grafana:
+  enabled: true
+  image: grafana/grafana:11.2.0
+  adminUser: admin
+  adminPassword: admin
+  service:
+    type: ClusterIP        # NodePort/LoadBalancer for external access
+    # nodePort: 30300
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+
+# ---------------------------------------------------------------------------
+# OTLP export (push to any OTLP backend: Grafana Cloud, Datadog, New Relic,
+# a self-hosted Collector, etc.). Works alongside Prometheus.
+# ---------------------------------------------------------------------------
+otlp:
+  enabled: false
+  endpoint: ""             # e.g. https://otlp.example.io
+  # headers go into a Secret (Authorization=Bearer <token>)
+  headers: ""
+
+# Alerting rules (PrometheusRule) — requires Prometheus Operator if using CRD.
+alerts:
+  enabled: false

@@ -1,0 +1,21 @@
+# Scrape the llm-d inference gateway / Endpoint Picker (EPP) metrics directly.
+# Adjust the selector to match your llm-d install (labels vary by chart).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: llmd-gateway
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: ["llm-d"]
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: ["llm-d-inference-gateway", "inference-gateway", "epp", "endpoint-picker"]
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics

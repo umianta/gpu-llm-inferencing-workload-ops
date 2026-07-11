@@ -1,0 +1,15 @@
+apiVersion: v2
+name: gpu-llm-inferencing-workload-ops
+description: Workload-aware GPU + vLLM + llm-d telemetry for Kubernetes (agent + Prometheus + Grafana).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - gpu
+  - vllm
+  - llm-d
+  - observability
+  - nvidia
+home: https://github.com/OWNER/gpu-llm-inferencing-workload-ops
+maintainers:
+  - name: platform-team

@@ -1,0 +1,133 @@
+# Disaggregated prefill / decode vLLM servers (Qwen2.5-1.5B), sized small to fit
+# alongside the existing model servers on the time-sliced GB10. The agent tags
+# metrics from these with role=prefill / role=decode (derived from the service
+# name), so Grafana can break prefill vs decode out separately.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-prefill
+  namespace: llm-d
+  labels:
+    app: vllm-prefill
+    llm-d.ai/role: prefill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-prefill
+  template:
+    metadata:
+      labels:
+        app: vllm-prefill
+        llm-d.ai/role: prefill
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          args:
+            - --model
+            - Qwen/Qwen2.5-1.5B-Instruct
+            - --served-model-name
+            - Qwen/Qwen2.5-1.5B-Instruct
+            - --gpu-memory-utilization
+            - "0.10"
+            - --max-model-len
+            - "2048"
+            - --enable-prefix-caching
+            - --enforce-eager
+            - --port
+            - "8000"
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-prefill
+  namespace: llm-d
+  labels:
+    app: vllm-prefill
+spec:
+  selector:
+    app: vllm-prefill
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-decode
+  namespace: llm-d
+  labels:
+    app: vllm-decode
+    llm-d.ai/role: decode
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-decode
+  template:
+    metadata:
+      labels:
+        app: vllm-decode
+        llm-d.ai/role: decode
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          args:
+            - --model
+            - Qwen/Qwen2.5-1.5B-Instruct
+            - --served-model-name
+            - Qwen/Qwen2.5-1.5B-Instruct
+            - --gpu-memory-utilization
+            - "0.10"
+            - --max-model-len
+            - "2048"
+            - --enable-prefix-caching
+            - --enforce-eager
+            - --port
+            - "8001"
+          ports:
+            - name: http
+              containerPort: 8001
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-decode
+  namespace: llm-d
+  labels:
+    app: vllm-decode
+spec:
+  selector:
+    app: vllm-decode
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http

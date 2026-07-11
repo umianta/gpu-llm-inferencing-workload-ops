@@ -1,0 +1,36 @@
+# RBAC for the telemetry agent: read-only access to pods (for attribution)
+# and nodes (for zone/region labels).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vllm-llmd-agent
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vllm-llmd-agent
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets", "deployments", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  # Required so the llm-d EPP SubjectAccessReview authorizes the agent to read
+  # the protected /metrics endpoint.
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vllm-llmd-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vllm-llmd-agent
+subjects:
+  - kind: ServiceAccount
+    name: vllm-llmd-agent
+    namespace: monitoring

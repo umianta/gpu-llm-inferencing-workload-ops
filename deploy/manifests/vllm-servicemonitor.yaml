@@ -1,0 +1,31 @@
+# Scrape vLLM's native /metrics directly (in addition to the agent), so you get
+# the full vLLM histogram set. The agent adds attribution + cost; this gives raw
+# fidelity. Targets the vLLM services in the llm-d namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vllm-servers
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames: ["llm-d"]
+  selector:
+    matchExpressions:
+      # match the vLLM services in your cluster (gemma4-vllm-svc, vllm-prefill, vllm-decode)
+      - key: app
+        operator: In
+        values: ["gemma4-vllm", "vllm-prefill", "vllm-decode"]
+  endpoints:
+    - port: http
+      interval: 15s
+      path: /metrics
+      relabelings:
+        # Promote pod/model labels for per-model dashboards.
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: vllm_app
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace

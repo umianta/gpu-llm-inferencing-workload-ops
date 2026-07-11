@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-llmd-agent"
+version = "0.1.0"
+description = "Workload-aware GPU + vLLM + llm-d telemetry agent for Kubernetes"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "nvidia-ml-py>=12.535.0",   # pynvml
+    "requests>=2.31.0",
+    "prometheus-client>=0.20.0",
+    "kubernetes>=29.0.0",
+    "opentelemetry-sdk>=1.25.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.25.0",
+]
+
+[project.optional-dependencies]
+dev = ["mypy>=1.10", "ruff>=0.5"]
+
+[project.scripts]
+vllm-llmd-agent = "vllm_llmd_agent.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vllm_llmd_agent*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

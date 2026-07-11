@@ -1,0 +1,35 @@
+# Fixes the llm-d EPP metrics 401/500. The EPP protects /metrics with delegated
+# Kubernetes auth (TokenReview + SubjectAccessReview), but the EPP ServiceAccount
+# ships without permission to CREATE those reviews — so every scrape fails 500
+# "Authentication failed". Binding system:auth-delegator grants exactly that.
+#
+# This is additive and reversible: `kubectl delete -f epp-metrics-auth.yaml`.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: flow-control-epp-auth-delegator
+  labels:
+    app.kubernetes.io/part-of: vllm-llmd-monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: flow-control-epp
+    namespace: llm-d-flow-control
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: optimized-baseline-epp-auth-delegator
+  labels:
+    app.kubernetes.io/part-of: vllm-llmd-monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: optimized-baseline-epp
+    namespace: llm-d-optimized-baseline

@@ -1,0 +1,134 @@
+# Node-level telemetry agent. Runs on every GPU node, scrapes local vLLM/llm-d
+# pods, joins with NVML + K8s metadata, and exposes /metrics (9835) for
+# Prometheus while optionally pushing OTLP.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vllm-llmd-agent
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vllm-llmd-agent
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm-llmd-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vllm-llmd-agent
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9835"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: vllm-llmd-agent
+      # Share host PID namespace so NVML compute PIDs can be mapped to pods
+      # via /proc/<pid>/cgroup.
+      hostPID: true
+      # NVIDIA runtime gives the agent NVML access without consuming a GPU slice.
+      runtimeClassName: nvidia
+      # Only schedule onto NVIDIA GPU nodes.
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: agent
+          image: docker.io/library/vllm-llmd-agent:0.1.0
+          imagePullPolicy: Never
+          args:
+            - "--sink"
+            - "both"
+            - "--interval"
+            - "30"
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CLUSTER
+              value: "dgx-spark"
+            # NVML access via the NVIDIA runtime (read-only, no slice consumed).
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "utility"
+            # vLLM and llm-d EPP endpoints are AUTO-DISCOVERED per node (each pod
+            # is scraped by exactly one agent — multi-node safe, no double-count).
+            # Set VLLM_ENDPOINTS / LLMD_ENDPOINTS to add static targets, or
+            # --no-discovery to disable.
+            - name: GPU_HOURLY_USD
+              value: "2.0"
+            # Persist accrued GPU-seconds on the node so cost survives restarts.
+            - name: COST_STATE_PATH
+              value: "/var/lib/vllm-llmd-agent/cost.json"
+            # OTLP push target (from the secret below). Leave endpoint empty to
+            # run Prometheus-only.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-llmd-otlp
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+                  optional: true
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: vllm-llmd-otlp
+                  key: OTEL_EXPORTER_OTLP_HEADERS
+                  optional: true
+          ports:
+            - name: metrics
+              containerPort: 9835
+              protocol: TCP
+          volumeMounts:
+            - name: cost-state
+              mountPath: /var/lib/vllm-llmd-agent
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      # Prepare the node-local cost-state dir writable by the non-root agent.
+      initContainers:
+        - name: cost-state-perms
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /var/lib/vllm-llmd-agent && chown 65532:65532 /var/lib/vllm-llmd-agent"]
+          volumeMounts:
+            - name: cost-state
+              mountPath: /var/lib/vllm-llmd-agent
+          securityContext:
+            runAsUser: 0
+      volumes:
+        - name: cost-state
+          hostPath:
+            path: /var/lib/vllm-llmd-agent
+            type: DirectoryOrCreate
+      # The NVIDIA device plugin + container runtime inject the driver; no
+      # explicit gpu resource request is needed for read-only NVML queries.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-llmd-agent
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: vllm-llmd-agent
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: vllm-llmd-agent
+  ports:
+    - name: metrics
+      port: 9835
+      targetPort: metrics

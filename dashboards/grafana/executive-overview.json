@@ -1,0 +1,1979 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "schemaVersion": 39,
+  "title": "GPU & LLM Workload Observability \u2014 Executive View",
+  "tags": [
+    "vllm",
+    "llm-d",
+    "executive",
+    "gpu"
+  ],
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "cluster",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(gpu_utilization, cluster)",
+        "current": {
+          "text": "dgx-spark",
+          "value": "dgx-spark"
+        },
+        "refresh": 2
+      },
+      {
+        "name": "model",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(vllm_requests_running{cluster=\"$cluster\"}, model)",
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## GPU & LLM Workload Observability \u2014 who's using your GPUs, how fast, and what it costs\n**\u2460 Demand** (how much each model is used) \u2192 **\u2461 Experience** (how fast it responds) \u2192 **\u2462 Supply** (GPU utilization, memory & cost) \u2192 **\u2463 Health** (power/temperature). The story: *demand drives GPU utilization and VRAM, which drive cost \u2014 while latency shows the user impact.*"
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "type": "row",
+      "title": "\u2460 Overview \u2014 what's running and what it costs",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "Models Serving",
+      "type": "stat",
+      "description": "Number of distinct models currently served.",
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "count(count by (model) (vllm_requests_running{cluster=\"$cluster\"}))"
+        }
+      ]
+    },
+    {
+      "title": "Est. GPU Cost (accrued)",
+      "type": "stat",
+      "description": "Active GPU-time x hourly rate. Only counts time the GPU is actually working.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 4,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "sum(cost_gpu_usd_estimate_total{cluster=\"$cluster\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "title": "GPU Busy %",
+      "type": "stat",
+      "description": "Average GPU compute utilization across the fleet.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 9,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 20
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 95
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "avg(gpu_utilization{cluster=\"$cluster\"}) * 100"
+        }
+      ]
+    },
+    {
+      "title": "GPU Memory Used %",
+      "type": "stat",
+      "description": "How full GPU VRAM is. High = risk of out-of-memory / eviction.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 14,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 92
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "max(gpu_memory_used_percent{cluster=\"$cluster\"})"
+        }
+      ]
+    },
+    {
+      "title": "Requests In Flight",
+      "type": "stat",
+      "description": "Requests currently running + waiting across all models.",
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 19,
+        "y": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "sum(vllm_requests_running{cluster=\"$cluster\"}) + sum(vllm_requests_waiting{cluster=\"$cluster\"})"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "\u2461 Demand \u2014 how much each model is used",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "Token Throughput by Model (tokens/sec)",
+      "type": "timeseries",
+      "description": "Output tokens generated per second, per model. This is the primary 'work done' signal.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(vllm_tokens_generated_total{cluster=\"$cluster\", model=~\"$model\"}[5m]))",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Requests: Running vs Waiting by Model",
+      "type": "timeseries",
+      "description": "Waiting requests climbing above running means the model is under-provisioned.",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "showPoints": "never",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (vllm_requests_running{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "running \u00b7 {{model}}"
+        },
+        {
+          "expr": "sum by (model) (vllm_requests_waiting{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "waiting \u00b7 {{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "\u2462 Experience \u2014 how fast it responds (latency)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "Time To First Token by Model",
+      "type": "timeseries",
+      "description": "How long a user waits before the first token. Lower is better.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (model) (vllm_ttft_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Inter-Token Latency by Model",
+      "type": "timeseries",
+      "description": "Time between output tokens (streaming smoothness). Lower is better.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (model) (vllm_itl_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Prefix Cache Hit Rate by Model",
+      "type": "timeseries",
+      "description": "Higher = more prompt reuse = cheaper & faster. Drops explain latency spikes.",
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 18
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (model) (vllm_prefix_cache_hit_rate{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "\u2463 Supply \u2014 GPU utilization, memory & cost (what demand consumes)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "GPU Utilization % (per GPU)",
+      "type": "timeseries",
+      "description": "Overall compute utilization per physical GPU.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "gpu_utilization{cluster=\"$cluster\"} * 100",
+          "legendFormat": "{{gpu_uuid}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "GPU Utilization by Model",
+      "type": "timeseries",
+      "description": "Compute (SM%) attributed to each model via NVML per-process sampling. Shows which model is actually driving the GPU.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "fillOpacity": 25,
+            "stacking": {
+              "mode": "normal"
+            },
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (gpu_utilization_model_percent{cluster=\"$cluster\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "VRAM Used by Model",
+      "type": "timeseries",
+      "description": "GPU memory held per model (weights + KV cache). Explains 'GPU Memory Used %'.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "fillOpacity": 25,
+            "stacking": {
+              "mode": "normal"
+            },
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (gpu_memory_model_bytes{cluster=\"$cluster\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Estimated Cost by Model ($)",
+      "type": "timeseries",
+      "description": "Accrued GPU cost. On a shared GPU this shows as 'shared'.",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (cost_gpu_usd_estimate_total{cluster=\"$cluster\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "\u2464 Hardware health \u2014 power, temperature & reliability",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "Power Draw (W)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "gpu_power_draw_watts{cluster=\"$cluster\"}",
+          "legendFormat": "{{gpu_uuid}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Temperature (\u00b0C)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 80
+              },
+              {
+                "color": "red",
+                "value": 87
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "thresholdsStyle": {
+              "mode": "line"
+            },
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "gpu_temperature_celsius{cluster=\"$cluster\"}",
+          "legendFormat": "{{gpu_uuid}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Throttling GPUs",
+      "type": "stat",
+      "description": "GPUs currently throttling (thermal/power). 0 = healthy.",
+      "gridPos": {
+        "h": 7,
+        "w": 4,
+        "x": 16,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "sum(gpu_throttle_active{cluster=\"$cluster\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "title": "Idle GPUs (util < 5%)",
+      "type": "stat",
+      "description": "Allocated but not working \u2014 potential wasted spend.",
+      "gridPos": {
+        "h": 7,
+        "w": 4,
+        "x": 20,
+        "y": 36
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "count(gpu_utilization{cluster=\"$cluster\"} < 0.05) or vector(0)"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "\u2465 Request lifecycle \u2014 where the time goes (prefill / decode / queue)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "End-to-End Request Latency by Model",
+      "type": "timeseries",
+      "description": "Total time from request arrival to final token \u2014 the number users feel. = queue + prefill + decode.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 44
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (model) (vllm_e2e_latency_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Queue Wait Time by Model",
+      "type": "timeseries",
+      "description": "How long requests sit in the queue before processing. Rising = under-provisioned.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 44
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (model) (vllm_queue_time_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Prefill vs Decode Duration (avg)",
+      "type": "timeseries",
+      "description": "How long each phase takes. Prefill = processing the prompt; decode = generating tokens. Prefill-heavy = long prompts; decode-heavy = long outputs.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 44
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg(vllm_prefill_time_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "prefill"
+        },
+        {
+          "expr": "avg(vllm_decode_time_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "decode"
+        },
+        {
+          "expr": "avg(vllm_queue_time_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "queue"
+        },
+        {
+          "expr": "avg(vllm_inference_time_seconds{cluster=\"$cluster\", model=~\"$model\"})",
+          "legendFormat": "inference (prefill+decode)"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Completed Requests / sec by Model",
+      "type": "timeseries",
+      "description": "Throughput in finished requests per second (successful completions).",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 51
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(vllm_requests_success_total{cluster=\"$cluster\", model=~\"$model\"}[5m]))",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Preemptions / sec by Model",
+      "type": "timeseries",
+      "description": "Requests preempted (paused/recomputed) due to KV-cache pressure. >0 means memory contention hurting latency.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 51
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(vllm_preemptions_total{cluster=\"$cluster\", model=~\"$model\"}[5m]))",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Prompt Cache Efficiency (cached prompt tokens %)",
+      "type": "timeseries",
+      "description": "Share of prompt tokens served from cache instead of recomputed. Higher = cheaper & faster prompts.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 51
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (model) (rate(vllm_tokens_prompt_cached_total{cluster=\"$cluster\", model=~\"$model\"}[5m])) / clamp_min(sum by (model) (rate(vllm_tokens_prompt_total{cluster=\"$cluster\", model=~\"$model\"}[5m])), 1)",
+          "legendFormat": "{{model}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "\u2466 Disaggregated serving \u2014 prefill vs decode servers (by role)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 58
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "Prefill Duration by Role",
+      "type": "timeseries",
+      "description": "Prompt-processing time on each server role. Compare the dedicated 'prefill' server vs co-located 'aggregated' servers.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 59
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (role, model) (vllm_prefill_time_seconds{cluster=\"$cluster\"})",
+          "legendFormat": "{{model}} \u00b7 {{role}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Decode Duration by Role",
+      "type": "timeseries",
+      "description": "Token-generation time on each server role. The dedicated 'decode' server should dominate here.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 59
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (role, model) (vllm_decode_time_seconds{cluster=\"$cluster\"})",
+          "legendFormat": "{{model}} \u00b7 {{role}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "TTFT & Inter-Token Latency by Role",
+      "type": "timeseries",
+      "description": "User-facing latency per role: prefill servers drive TTFT, decode servers drive inter-token latency.",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 59
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "avg by (role, model) (vllm_ttft_seconds{cluster=\"$cluster\"})",
+          "legendFormat": "TTFT \u00b7 {{model}} \u00b7 {{role}}"
+        },
+        {
+          "expr": "avg by (role, model) (vllm_itl_seconds{cluster=\"$cluster\"})",
+          "legendFormat": "ITL \u00b7 {{model}} \u00b7 {{role}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Token Throughput by Role (tokens/sec)",
+      "type": "timeseries",
+      "description": "Output tokens/sec on each role \u2014 shows how work splits across prefill / decode / co-located servers.",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 66
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 20,
+            "stacking": {
+              "mode": "normal"
+            },
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (role, model) (rate(vllm_tokens_generated_total{cluster=\"$cluster\"}[5m]))",
+          "legendFormat": "{{model}} \u00b7 {{role}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "title": "Requests In Flight by Role",
+      "type": "timeseries",
+      "description": "Running requests per role \u2014 how load is distributed across prefill/decode/co-located servers.",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 66
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (role, model) (vllm_requests_running{cluster=\"$cluster\"})",
+          "legendFormat": "{{model}} \u00b7 {{role}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "\u2467 Endpoints \u2014 every model server (URL, service/LB, role, live stats)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 73
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "Model Endpoints",
+      "type": "table",
+      "description": "One row per discovered vLLM server: the model it serves, its Kubernetes service (load balancer), role, the exact scrape URL, and live stats.",
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 74
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "format": "table",
+          "expr": "vllm_requests_running{cluster=\"$cluster\"}"
+        },
+        {
+          "refId": "B",
+          "instant": true,
+          "format": "table",
+          "expr": "sum by (model, service, role, model_namespace, endpoint) (rate(vllm_tokens_generated_total{cluster=\"$cluster\"}[5m]))"
+        },
+        {
+          "refId": "C",
+          "instant": true,
+          "format": "table",
+          "expr": "sum by (model, service, role, model_namespace, endpoint) (vllm_e2e_latency_seconds{cluster=\"$cluster\"})"
+        },
+        {
+          "refId": "D",
+          "instant": true,
+          "format": "table",
+          "expr": "sum by (model, service, role, model_namespace, endpoint) (vllm_requests_waiting{cluster=\"$cluster\"})"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "cluster": true,
+              "job": true,
+              "instance": true,
+              "pod": true,
+              "container": true,
+              "namespace": true,
+              "endpoint_orig": true
+            },
+            "renameByName": {
+              "model": "Model",
+              "model_namespace": "Namespace",
+              "service": "Service / LB",
+              "role": "Role",
+              "endpoint": "URL",
+              "Value #A": "Running",
+              "Value #D": "Waiting",
+              "Value #B": "Tokens/s",
+              "Value #C": "E2E Latency (s)"
+            },
+            "indexByName": {
+              "Model": 0,
+              "Namespace": 1,
+              "Service / LB": 2,
+              "Role": 3,
+              "URL": 4,
+              "Value #A": 5,
+              "Value #D": 6,
+              "Value #B": 7,
+              "Value #C": 8
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Tokens/s"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "E2E Latency (s)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "row",
+      "title": "\u2468 Agent health \u2014 observability of the observer",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 86
+      },
+      "fieldConfig": {
+        "defaults": {}
+      }
+    },
+    {
+      "title": "Agents Up",
+      "type": "stat",
+      "description": "Number of telemetry agents reporting (one per GPU node).",
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 0,
+        "y": 87
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "count(agent_up{cluster=\"$cluster\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "title": "Scrape Errors",
+      "type": "stat",
+      "description": "vLLM/EPP scrape failures across agents. 0 = all targets healthy.",
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 5,
+        "y": 87
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "sum(agent_scrape_errors{cluster=\"$cluster\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "title": "Targets Discovered",
+      "type": "stat",
+      "description": "Total vLLM/EPP endpoints being scraped fleet-wide (auto-discovery).",
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 10,
+        "y": 87
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": {
+          "calc": "lastNotNull"
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "textMode": "value",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "sum(agent_targets_discovered{cluster=\"$cluster\"}) or vector(0)"
+        }
+      ]
+    },
+    {
+      "title": "Agent Cycle Duration by Node",
+      "type": "timeseries",
+      "description": "How long each agent's collect cycle takes. Rising = scrape slowness or too many targets.",
+      "gridPos": {
+        "h": 5,
+        "w": 9,
+        "x": 15,
+        "y": 87
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "lineWidth": 2,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "pointSize": 5,
+            "axisGridShow": true,
+            "axisBorderShow": false
+          },
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "agent_cycle_duration_seconds{cluster=\"$cluster\"}",
+          "legendFormat": "{{node}}"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true,
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    }
+  ],
+  "__inputs": [
+    {
+      "name": "DS_PROMETHEUS",
+      "label": "Prometheus",
+      "type": "datasource",
+      "pluginId": "prometheus"
+    }
+  ],
+  "liveNow": true,
+  "style": "dark",
+  "graphTooltip": 1
+}

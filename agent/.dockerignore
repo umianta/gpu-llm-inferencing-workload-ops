@@ -1,0 +1,5 @@
+# .dockerignore keeps the build context small and reproducible.
+**/__pycache__/
+**/*.pyc
+.venv/
+.git/

@@ -1,0 +1,23 @@
+{{- if .Values.agent.enabled }}
+✅ vllm-llmd-monitoring installed as "{{ .Release.Name }}" in namespace "{{ .Release.Namespace }}".
+
+Agent DaemonSet is running on every NVIDIA GPU node (auto-discovery: {{ .Values.agent.discovery.enabled }}).
+
+{{- if .Values.grafana.enabled }}
+
+📊 Grafana ("LLM Serving — Executive Overview"):
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "vllm-llmd.fullname" . }}-grafana 3000:3000
+   open http://localhost:3000  (user: {{ .Values.grafana.adminUser }})
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+
+🔎 Prometheus:
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "vllm-llmd.fullname" . }}-prometheus 9090:9090
+{{- end }}
+{{- if .Values.otlp.enabled }}
+
+📡 OTLP export -> {{ .Values.otlp.endpoint }}
+{{- end }}
+
+Set agent.gpuHourlyUsd to your real GPU $/hour to enable cost estimates.
+{{- end }}

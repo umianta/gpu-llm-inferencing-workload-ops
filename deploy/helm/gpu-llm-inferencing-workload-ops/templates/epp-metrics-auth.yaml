@@ -1,0 +1,18 @@
+{{- if .Values.eppMetricsAuth.enabled }}
+{{- range .Values.eppMetricsAuth.serviceAccounts }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .name }}-auth-delegator
+  labels: {{- include "vllm-llmd.labels" $ | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: {{ .name }}
+    namespace: {{ .namespace }}
+---
+{{- end }}
+{{- end }}

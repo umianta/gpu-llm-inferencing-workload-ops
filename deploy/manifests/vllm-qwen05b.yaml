@@ -1,0 +1,69 @@
+# A second, DISTINCT model (Qwen2.5-0.5B) so the Grafana "by model" panels show
+# more than one model name. Sized tiny (gpu-memory-utilization 0.08) to fit
+# alongside everything else on the time-sliced GB10.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen05b
+  namespace: llm-d
+  labels:
+    app: vllm-qwen05b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-qwen05b
+  template:
+    metadata:
+      labels:
+        app: vllm-qwen05b
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          env:
+            # Access the GPU via the NVIDIA runtime WITHOUT consuming a
+            # device-plugin time-slice (all 4 slices are already allocated).
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
+            - name: NVIDIA_DRIVER_CAPABILITIES
+              value: "compute,utility"
+          args:
+            - --model
+            - Qwen/Qwen2.5-0.5B-Instruct
+            - --served-model-name
+            - Qwen/Qwen2.5-0.5B-Instruct
+            - --gpu-memory-utilization
+            - "0.03"
+            - --max-model-len
+            - "1024"
+            - --enable-prefix-caching
+            - --enforce-eager
+            - --port
+            - "8000"
+          ports:
+            - name: http
+              containerPort: 8000
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen05b
+  namespace: llm-d
+  labels:
+    app: vllm-qwen05b
+spec:
+  selector:
+    app: vllm-qwen05b
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

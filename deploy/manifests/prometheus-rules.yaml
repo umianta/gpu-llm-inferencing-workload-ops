@@ -1,0 +1,100 @@
+# Alerting + recording rules for GPU / vLLM / llm-d health.
+# Requires Prometheus Operator (PrometheusRule CRD).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vllm-llmd-rules
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: gpu.recording
+      interval: 30s
+      rules:
+        # Fleet-wide average GPU utilisation.
+        - record: cluster:gpu_utilization:avg
+          expr: avg(gpu_utilization)
+        # Per-model average GPU utilisation (attribution from the agent).
+        - record: model:gpu_utilization:avg
+          expr: avg by (model) (gpu_utilization)
+        # Idle GPUs: allocated but doing nothing.
+        - record: cluster:gpu_idle:count
+          expr: count(gpu_utilization < 0.05)
+
+    - name: gpu.alerts
+      rules:
+        - alert: GpuHighTemperature
+          expr: gpu_temperature_celsius > 85
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "GPU {{ $labels.gpu_uuid }} running hot ({{ $value }}°C)"
+            description: "GPU on node {{ $labels.node }} above 85°C for 5m."
+
+        - alert: GpuThrottling
+          expr: gpu_throttle_active == 1
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "GPU {{ $labels.gpu_uuid }} is throttling"
+            description: "Thermal/power throttling active on {{ $labels.pod }}."
+
+        - alert: GpuEccUncorrectedErrors
+          expr: increase(gpu_ecc_errors_uncorrected[10m]) > 0
+          labels: { severity: critical }
+          annotations:
+            summary: "Uncorrected ECC errors on GPU {{ $labels.gpu_uuid }}"
+            description: "Hardware memory errors — consider draining the node."
+
+        - alert: GpuIdleButAllocated
+          expr: gpu_utilization < 0.05 and on(gpu_uuid) gpu_memory_used_percent > 10
+          for: 30m
+          labels: { severity: info }
+          annotations:
+            summary: "GPU {{ $labels.gpu_uuid }} idle but holding memory"
+            description: "Model {{ $labels.model }} idle 30m — wasted capacity."
+
+    - name: vllm.alerts
+      rules:
+        - alert: VllmQueueBacklog
+          expr: vllm_requests_waiting > 20
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "vLLM queue backlog for {{ $labels.model }}"
+            description: "{{ $value }} requests waiting — under-provisioned."
+
+        - alert: VllmHighTTFT
+          expr: vllm_ttft_seconds > 2
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "High time-to-first-token for {{ $labels.model }}"
+            description: "TTFT {{ $value }}s exceeds 2s SLO."
+
+        - alert: VllmKvCacheNearFull
+          expr: vllm_kv_cache_usage_percent > 90
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: "KV cache near full for {{ $labels.model }}"
+            description: "KV cache {{ $value }}% — preemptions/recompute likely."
+
+    - name: llmd.alerts
+      rules:
+        - alert: LlmdPrefixCacheColdSpell
+          expr: llmd_prefix_cache_hit_rate < 0.2
+          for: 15m
+          labels: { severity: info }
+          annotations:
+            summary: "llm-d prefix cache hit rate low ({{ $value }})"
+            description: "Routing may not be exploiting prefix locality."
+
+        - alert: LlmdNoReadyEndpoints
+          expr: llmd_pool_ready_endpoints < 1
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "llm-d pool has no ready endpoints"
+            description: "Inference gateway has nothing to route to."

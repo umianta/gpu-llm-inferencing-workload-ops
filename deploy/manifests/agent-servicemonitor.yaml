@@ -1,0 +1,32 @@
+# ServiceMonitor for the telemetry agent (Prometheus Operator).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: vllm-llmd-agent
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack   # match your Prometheus serviceMonitorSelector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm-llmd-agent
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+---
+# DCGM exporter ServiceMonitor.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: dcgm-exporter
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dcgm-exporter
+  endpoints:
+    - port: metrics
+      interval: 30s
