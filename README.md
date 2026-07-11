@@ -11,6 +11,11 @@ to the **model, pod, and role** responsible for it.
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![Kubernetes](https://img.shields.io/badge/kubernetes-DaemonSet-326ce5)
 
+![GPU & LLM Workload Observability dashboard](docs/images/dashboard.png)
+
+> The bundled executive Grafana dashboard — demand, latency, GPU supply and cost,
+> each attributed to the model responsible. [See the full dashboard ↓](#dashboard)
+
 ---
 
 ## The problem
@@ -113,7 +118,15 @@ kubectl port-forward -n monitoring svc/<release>-grafana 3000:3000
 
 ---
 
+<a name="dashboard"></a>
+
 ## The dashboard (one screen, read top → bottom)
+
+![Full executive dashboard — all nine sections](docs/images/dashboard-full.png)
+
+*The full executive dashboard on a live cluster: two Qwen2.5 models served under
+vLLM/llm-d, with per-model throughput, latency, GPU utilization, VRAM, cost, and
+disaggregated prefill/decode timing.*
 
 1. **Overview** — models serving, cost, GPU busy %, memory %, requests in flight
 2. **Demand** — token throughput & queue depth per model
