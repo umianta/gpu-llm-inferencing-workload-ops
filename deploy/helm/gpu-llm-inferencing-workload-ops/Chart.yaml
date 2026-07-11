@@ -10,6 +10,6 @@ keywords:
   - llm-d
   - observability
   - nvidia
-home: https://github.com/OWNER/gpu-llm-inferencing-workload-ops
+home: https://github.com/umianta/gpu-llm-inferencing-workload-ops
 maintainers:
   - name: platform-team

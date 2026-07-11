@@ -10,7 +10,7 @@ fullnameOverride: ""
 cluster: "default"
 
 image:
-  repository: ghcr.io/OWNER/gpu-llm-inferencing-workload-ops-agent
+  repository: ghcr.io/umianta/gpu-llm-inferencing-workload-ops-agent
   tag: "0.1.0"
   # For air-gapped / k3s local image import, set to Never and preload the image.
   pullPolicy: IfNotPresent
