@@ -13,7 +13,7 @@ to the **model, pod, and role** responsible for it.
 
 ![GPU & LLM Workload Observability dashboard](docs/images/dashboard.png)
 
-> The bundled executive Grafana dashboard — demand, latency, GPU supply and cost,
+> The bundled Grafana dashboard — demand, latency, GPU supply and cost,
 > each attributed to the model responsible. [See the full dashboard ↓](#dashboard)
 
 ---
@@ -122,9 +122,9 @@ kubectl port-forward -n monitoring svc/<release>-grafana 3000:3000
 
 ## The dashboard (one screen, read top → bottom)
 
-![Full executive dashboard — all nine sections](docs/images/dashboard-full.png)
+![Full dashboard — all nine sections](docs/images/dashboard-full.png)
 
-*The full executive dashboard on a live cluster: two Qwen2.5 models served under
+*The full dashboard on a live cluster: two Qwen2.5 models served under
 vLLM/llm-d, with per-model throughput, latency, GPU utilization, VRAM, cost, and
 disaggregated prefill/decode timing.*
 
